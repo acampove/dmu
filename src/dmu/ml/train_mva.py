@@ -178,7 +178,10 @@ class TrainMva:
 
         return model
     # ---------------------------------------------
-    def _get_models(self, load_trained : bool) -> list[cls]:
+    def _get_models(
+            self,
+            load_trained : bool,
+            workers      :  int) -> list[cls]:
         '''
         Will create models, train them and return them
         '''
@@ -188,6 +191,9 @@ class TrainMva:
 
         nfold = self._cfg['training']['nfold']
         rdmst = self._cfg['training']['rdm_stat']
+        if nfold < workers:
+            log.warning(f'Asked {workers} workers, but only found {nfold} folds, running with {nfold} workers')
+            workers = nfold
 
         kfold = StratifiedKFold(n_splits=nfold, shuffle=True, random_state=rdmst)
 
@@ -198,6 +204,7 @@ class TrainMva:
         l_arr_all_ts = []
         l_arr_sig_ts = []
         l_arr_bkg_ts = []
+
         for arr_itr, arr_its in kfold.split(self._df_ft, self._l_lab):
             log.debug(20 * '-')
             log.info(f'Training fold: {ifold}')
@@ -601,12 +608,16 @@ class TrainMva:
     # ---------------------------------------------
     def run(
             self,
+            workers      : int  = 1,
             skip_fit     : bool = False,
             load_trained : bool = False) -> float:
         '''
-        Will do the training
+        Will run the training
 
-        skip_fit: By default false, if True, it will only do the plots of features and save tables
+        Parameters
+        ----------------
+        workers     : By default 1, but can be used to run with multiple processes, one per fold
+        skip_fit    : By default false, if True, it will only do the plots of features and save tables
         load_trained: If true, it will load the models instead of training, by default false
 
         Returns
@@ -618,9 +629,9 @@ class TrainMva:
         self._plot_features()
 
         if skip_fit:
-            return self._auc 
+            return self._auc
 
-        l_mod = self._get_models(load_trained = load_trained)
+        l_mod = self._get_models(load_trained = load_trained, workers=workers)
         if not load_trained:
             for ifold, mod in enumerate(l_mod):
                 self._save_model(mod, ifold)

@@ -110,3 +110,20 @@ def test_only_diagnostics():
     obj= TrainMva(sig=rdf_sig, bkg=rdf_bkg, cfg=cfg)
     obj.run(load_trained=True)
 # -------------------------------
+def test_with_workers():
+    '''
+    Test a simple training
+    '''
+    nfold = 10
+    nwork =  4
+
+    rdf_sig = ut.get_rdf(kind='sig')
+    rdf_bkg = ut.get_rdf(kind='bkg')
+    cfg     = ut.get_config('ml/tests/train_mva.yaml')
+    cfg['training']['nfold'] = nfold
+    path    = cfg['saving']['output']
+    cfg['saving']['output'] = path.replace('train_mva', f'train_mva_{nfold:03}')
+
+    obj= TrainMva(sig=rdf_sig, bkg=rdf_bkg, cfg=cfg)
+    obj.run(workers=nwork)
+# -------------------------------
