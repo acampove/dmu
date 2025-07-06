@@ -3,7 +3,6 @@ This module implements tests for the KDEOptimizer class
 '''
 import os
 
-import numpy
 import pytest
 import pandas            as pnd
 import matplotlib.pyplot as plt
