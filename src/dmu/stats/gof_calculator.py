@@ -2,14 +2,17 @@
 Module holding GofCalculator class
 '''
 from functools import lru_cache
+from typing    import cast
 
 import zfit
 import numpy
 import pandas as pnd
 
 from scipy                  import stats
-from zfit.core.basepdf      import BasePDF   as zpdf
-from zfit.core.parameter    import Parameter as zpar
+from zfit.interface         import ZfitBinnedData
+from zfit.interface         import ZfitData      as zdat
+from zfit.interface         import ZfitPDF       as zpdf
+from zfit.interface         import ZfitParameter as zpar
 from dmu.logging.log_store  import LogStore
 
 log = LogStore.add_logger('dmu:stats:gofcalculator')
@@ -26,14 +29,35 @@ class GofCalculator:
         self._pdf     = self._pdf_from_nll()
         self._data_in = self._data_from_nll()
         self._data_np = self._data_np_from_data(self._data_in)
-        self._data_zf = zfit.Data.from_numpy(obs=self._pdf.space, array=self._data_np)
+        self._data_bn = self._data_bn_from_data(self._data_in)
+        self._data_zf = self._get_zdata()
+    # ----------------------
+    def _get_zdata(self) -> zdat|ZfitBinnedData:
+        '''
+        Returns
+        -------------
+        Data usable by zfit to do fits
+        '''
+        if self._data_np is not None:
+            return zfit.Data.from_numpy(obs=self._pdf.space, array=self._data_np)
+
+        if isinstance(self._data_in, ZfitBinnedData):
+            return self._data_in
+
+        raise ValueError('Data is neither binned, nor convertible to numpy array')
     # ---------------------
-    def _data_np_from_data(self, dat) -> numpy.ndarray:
+    def _data_np_from_data(self, dat) -> numpy.ndarray|None:
         if isinstance(dat, numpy.ndarray):
             return dat
 
+        if isinstance(dat, zfit.data.BinnedData):
+            log.info('Input data is binned, cannot convert to numpy')
+            return None
+
         if isinstance(dat, zfit.Data):
-            return zfit.run(zfit.z.unstack_x(dat))
+            arr_val = zfit.run(zfit.z.unstack_x(dat))
+            arr_val = cast(numpy.ndarray, arr_val)
+            return arr_val
 
         if isinstance(dat, pnd.DataFrame):
             return dat.to_numpy()
@@ -44,6 +68,21 @@ class GofCalculator:
 
         data_type = str(type(dat))
         raise ValueError(f'Data is not a numpy array, zfit.Data or pandas.DataFrame, but {data_type}')
+    # ----------------------
+    def _data_bn_from_data(self, dat) -> ZfitBinnedData|None:
+        '''
+        Parameters
+        -------------
+        dat: Zfit data
+
+        Returns
+        -------------
+        ZfitBinned data or None if input is not binned
+        '''
+        if isinstance(dat, ZfitBinnedData):
+            return dat
+
+        return None
     # ---------------------
     def _pdf_from_nll(self) -> zpdf:
         l_model = self._nll.model
@@ -52,7 +91,7 @@ class GofCalculator:
 
         return l_model[0]
     # ---------------------
-    def _data_from_nll(self) -> zpdf:
+    def _data_from_nll(self) -> zdat:
         l_data = self._nll.data
         if len(l_data) != 1:
             raise ValueError('Not found one and only one dataset')
@@ -81,7 +120,9 @@ class GofCalculator:
     # ---------------------
     def _get_pdf_bin_contents(self) -> numpy.ndarray:
         nbins, min_x, max_x  = self._get_binning()
-        _, arr_edg = numpy.histogram(self._data_np, bins = nbins, range=(min_x, max_x))
+
+        if self._data_np is not None:
+            _, arr_edg = numpy.histogram(self._data_np, bins = nbins, range=(min_x, max_x))
 
         size = arr_edg.size
 
@@ -139,7 +180,7 @@ class GofCalculator:
         -----------------
         kind: Type of goodness of fit: pvalue, chi2, chi2/ndof
 
-        Returns 
+        Returns
         -----------------
         Goodness of fit of a given kind
         '''
