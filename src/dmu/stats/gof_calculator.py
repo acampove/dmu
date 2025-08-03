@@ -121,8 +121,10 @@ class GofCalculator:
     def _get_pdf_bin_contents(self) -> numpy.ndarray:
         nbins, min_x, max_x  = self._get_binning()
 
-        if self._data_np is not None:
+        if   self._data_np is not None:
             _, arr_edg = numpy.histogram(self._data_np, bins = nbins, range=(min_x, max_x))
+        elif self._data_bn is not None:
+
 
         size = arr_edg.size
 
